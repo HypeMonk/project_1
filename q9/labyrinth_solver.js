@@ -46,8 +46,13 @@ const WEEK  = '2026-W11';                        // 👈 Change current week
     return s.length % 2 ? s[m] : (s[m-1] + s[m]) / 2;
   };
   const pct = (a, p) => {
+    if (a.length === 0) return 0;
     const s = [...a].sort((x, y) => x - y);
-    return s[Math.ceil(s.length * p / 100) - 1];
+    const pos = (s.length - 1) * p / 100;
+    const base = Math.floor(pos);
+    const rest = pos - base;
+    if (s[base + 1] !== undefined) return s[base] + rest * (s[base + 1] - s[base]);
+    return s[base];
   };
   const pearson = (x, y) => {
     const mx = mean(x), my = mean(y);
@@ -62,7 +67,9 @@ const WEEK  = '2026-W11';                        // 👈 Change current week
     const text = q.text.toLowerCase();
     const hints = q.columns_hint || [];
     const [c1, c2] = hints;
-    const data = frags.filter(f => hints.every(h => f[h] !== null && f[h] !== undefined && f[h] !== ''));
+    
+    // Strict: Exclude the entire record if ANY field is null, undefined, or 'CORRUPT'
+    const data = frags.filter(f => Object.values(f).every(v => v !== null && v !== undefined && v !== '' && v !== 'CORRUPT'));
     if (!data.length) return null;
     const v1 = data.map(f => Number(f[c1])), v2 = c2 ? data.map(f => Number(f[c2])) : [];
     const r = n => rd(n, dp);
@@ -76,11 +83,11 @@ const WEEK  = '2026-W11';                        // 👈 Change current week
       return isNaN(top) ? top : Number(top);
     }
     if (/spearman/.test(text)) {
-      const rank = a => {
-        const sorted = [...new Set(a)].sort((x, y) => x - y);
-        return a.map(v => sorted.indexOf(v) + 1);
+      const getRanks = a => {
+        const sorted = [...a].sort((x, y) => x - y);
+        return a.map(v => (sorted.indexOf(v) + sorted.lastIndexOf(v) + 2) / 2);
       };
-      return r(pearson(rank(v1), rank(v2)));
+      return r(pearson(getRanks(v1), getRanks(v2)));
     }
     if (/pearson|correlation/.test(text)) return r(pearson(v1, v2));
     if (/slope|linear regression/.test(text) && !/intercept/.test(text)) {
@@ -182,10 +189,8 @@ const WEEK  = '2026-W11';                        // 👈 Change current week
             const c = colRes.data;
             if (c.fragment_type === 'required') {
                 const d = c.fragment?.data || {};
-                if (!Object.values(d).some(v => v === 'CORRUPT')) {
-                    frags.push(d);
-                    console.log(`💎 Required Fragment #${frags.length} Collected (Start Room)`);
-                }
+                frags.push(d);
+                console.log(`💎 Required Fragment #${frags.length} Collected (Start Room)`);
             }
             visited[room].item_collected = true;
         }
@@ -226,12 +231,8 @@ const WEEK  = '2026-W11';                        // 👈 Change current week
           const c = colRes.data;
           if (c.fragment_type === 'required') {
             const d = c.fragment?.data || {};
-            if (!Object.values(d).some(v => v === 'CORRUPT')) {
-              frags.push(d);
-              console.log(`💎 Required Fragment #${frags.length} Collected`);
-            } else {
-              console.warn(`⚠️ Corrupt fragment in room ${room} — skipped`);
-            }
+            frags.push(d);
+            console.log(`💎 Required Fragment #${frags.length} Collected`);
           } else {
             console.log(`🗑️ Distractor in room ${room} — skipped`);
           }
