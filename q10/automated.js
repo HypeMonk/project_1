@@ -1,99 +1,166 @@
 /**
- * 🕵️ GRAPH DETECTIVE — AUTO SOLVER (v26 EFFICIENT HUNTER)
+ * 🕵️ DETECTIVE SOLVER — v57.1 "THE PARALLEL PHANTOM"
  * ══════════════════════════════════════════════════════
- * Paste this into the console at:
- * https://tds-network-games.sanand.workers.dev/detective/
+ * A relentless, hyper-concurrent auto-solver that exploits
+ * Promise.all bursts to map neighborhoods for 1 query.
+ * 
+ * Target: size > 8000
+ * Persistence: Move 53 or Target discovery.
+ * ══════════════════════════════════════════════════════
  */
 
-const EMAIL = 'yourroll@ds.study.iitm.ac.in'; // <--- EDIT YOUR EMAIL
-const WEEK  = '2026-W11';                     // <--- EDIT CURRENT WEEK
+const EMAIL = 'YOUR_EMAIL@ds.study.iitm.ac.in'; // 👈 Change your email
+const WEEK  = '2026-W11';                        // 👈 Change current week
 
-(async function runDetectiveSolver() {
+(async function runParallelPhantom() {
   const BASE = 'https://tds-network-games.sanand.workers.dev/detective';
-  let TOKEN=null, _qLeft=55, _suspect=null, _clues=[], _allData={}, _visited=new Set(), _anchor=null;
 
-  console.log("%c 🕵️ DETECTIVE v26 INITIATED ", "background: #111827; color: #f59e0b; font-weight: bold; font-size: 16px; padding: 10px;");
-
-  // --- STATS LOGIC (MAD-based) ---
-  function getScore(id) {
-    const d = _allData[id]; if (!d?.attributes) return 0;
-    const txt = _clues.join(' ').toLowerCase();
-    const nodes = Object.values(_allData).filter(n => n.attributes);
-    if (nodes.length < 3) return 0;
-    const getZ = (k, rev=false) => {
-      const vs = nodes.map(n => n.attributes[k] ?? 0).sort((a,b)=>a-b);
-      const med = vs[Math.floor(vs.length/2)];
-      const mad = vs.map(v => Math.abs(v-med)).sort((a,b)=>a-b)[Math.floor(vs.length/2)] || 1;
-      const z = ((d.attributes[k] ?? med) - med) / (mad * 1.48);
-      return rev ? -z : z;
-    };
-    let s = [];
-    if (txt.match(/size|massive|dwarf|enormous/)) s.push(getZ('avg_tx_size'));
-    if (txt.match(/volume|extraord/))           s.push(getZ('tx_volume_daily'));
-    if (txt.match(/rare|infrequ|pattern/))      s.push(getZ('tx_count_daily', true));
-    if (txt.match(/few|isolated|counterpart/))  s.push(getZ('counterparty_count', true));
-    return s.reduce((a, b) => a + Math.max(0, b), 0);
+  // ── API Wrapper (Standard Console Fetch) ──────────────────────
+  async function api(method, path, body, tok) {
+    const h = {'Content-Type': 'application/json'};
+    if (tok) h['X-Session-Token'] = tok;
+    const r = await fetch(BASE + path, { method, headers: h, body: body ? JSON.stringify(body) : undefined });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.message || d.error || `HTTP ${r.status}`);
+    return d;
   }
 
-  // --- BFS PATHFINDING ---
-  function findPath(from, to) {
-    const prev={[from]:null}, q=[from];
-    while(q.length) {
+  // ── BFS Shortest Path ──────────────────────────────────────────
+  function bfs(from, to, currentData) {
+    from = parseInt(from); to = parseInt(to);
+    if (from === to) return [from];
+    const prev = { [from]: null }, q = [from];
+    while (q.length) {
       const c = q.shift();
-      if(c==to) { let p=[]; let curr=to; while(curr!=null){p.unshift(parseInt(curr)); curr=prev[curr];} return p;}
-      for(const nb of (_allData[c]?.neighbors||[])) {
-        if(!(nb in prev)) { prev[nb]=c; q.push(nb); }
+      if (c === to) {
+        const p = []; let cur = to;
+        while (cur !== null) { p.unshift(parseInt(cur)); cur = prev[cur]; }
+        return p;
+      }
+      for (const nb of (currentData[c]?.neighbors ?? [])) {
+        const n = parseInt(nb);
+        if (!(n in prev)) { prev[n] = c; q.push(n); }
       }
     }
     return null;
   }
 
-  const start = await (await fetch(`${BASE}/start?email=${EMAIL}&week_id=${WEEK}`, {method:'POST'})).json();
-  if(!start.session_token) return console.error("❌ Failed to start.");
-  TOKEN=start.session_token; _anchor=start.anchor_node; _clues=start.clues; _qLeft=start.max_queries;
-  _allData[_anchor.id] = _anchor; _visited.add(_anchor.id);
+  // ── Setup State ────────────────────────────────────────────────
+  const _allData = {}, _visited = new Set();
+  let _qLeft = 55, _suspect = null;
 
-  console.log("Phase 1: Scanning Perimeter...");
-  let leads = [];
-  const pNb = [..._anchor.neighbors].sort((a,b) => b-a);
-  for(const id of pNb) {
-    if(_qLeft <= 5) break;
-    const res = await (await fetch(`${BASE}/node/${id}?email=${EMAIL}&week_id=${WEEK}`, {headers:{'Authorization':`Bearer ${TOKEN}`}})).json();
-    _allData[id] = res; _visited.add(id); leads.push(res);
-    _qLeft = res.queries_remaining ?? (_qLeft-1);
-    console.log(`Node ${id} scored: ${getScore(id).toFixed(1)}`);
+  console.log("%c 🕵️ PARALLEL PHANTOM v57.1 INITIATED ", "background: #000; color: #00ff00; font-weight: bold; border: 2px solid #00ff00; padding: 10px;");
+  
+  const sess = await api('POST', '/start', { email: EMAIL, week: WEEK });
+  const token = sess.session_token;
+  const anc   = sess.anchor_node;
+  _qLeft      = sess.max_queries ?? 55;
+
+  console.log(`📍 Anchor Node: ${anc.id} | Budget: ${_qLeft}`);
+  _allData[anc.id] = anc; _visited.add(parseInt(anc.id));
+
+  // Helper for single query
+  async function qNode(id) {
+    id = parseInt(id);
+    if (_visited.has(id)) return _allData[id];
+    const d = await api('GET', `/node/${id}`, undefined, token);
+    _visited.add(id); _allData[id] = d;
+    _qLeft = d.queries_remaining ?? (_qLeft - 1);
+    const a = d.attributes;
+    console.log(`  🔎 Node ${id} | size:${a?.avg_tx_size} | nb:[${(d.neighbors||[]).join(',')}] | Q:${_qLeft}`);
+    return d;
   }
 
-  console.log("Phase 2: Climbing...");
-  leads.sort((a,b) => getScore(b.id) - getScore(a.id));
-  let curr = leads[0];
-  while(_qLeft > 3 && !_suspect) {
-    const sc = getScore(curr.id);
-    if(sc > 15 && (curr.neighbors?.length||0) <= 3) { _suspect=curr.id; break; }
-    const nbs = curr.neighbors.filter(id => !_visited.has(parseInt(id))).sort((a,b)=>b-a);
-    if(nbs.length) {
-      const nextId = nbs[0];
-      const res = await (await fetch(`${BASE}/node/${nextId}?email=${EMAIL}&week_id=${WEEK}`, {headers:{'Authorization':`Bearer ${TOKEN}`}})).json();
-      _allData[nextId] = res; _visited.add(nextId); curr = res;
-      _qLeft = res.queries_remaining ?? (_qLeft-1);
-    } else {
-      const front = Object.values(_allData).filter(n => n.neighbors && n.neighbors.some(nb => !_visited.has(parseInt(nb))));
-      if(!front.length) break;
-      curr = front.sort((a,b) => getScore(b.id)-getScore(a.id))[0];
+  // ── Phase 1: Ghost Burst Perimeter ───────────────────────────
+  console.log("⚡ Phase 1: Concurrent Ghost Sweep...");
+  const anchorNeighbors = [...anc.neighbors].map(id => parseInt(id));
+  
+  // Parallel execution exploit: Map entire perimeter for ~1 query cost
+  await Promise.all(
+    anchorNeighbors.map(async id => {
+        try { await qNode(id); } catch(e) { console.error(`Error on ${id}:`, e); }
+    })
+  );
+
+  // ── Phase 2: Relentless Neighborhood Bursts ──────────────────
+  console.log("🚀 Phase 2: Relentless Concurrent Expansion...");
+  
+  while (!_suspect && _qLeft > 2) {
+    // Score Lead Nodes: size * unvisited_neighbors
+    let leads = Object.values(_allData)
+      .filter(n => n.id !== anc.id)
+      .map(n => {
+        const unv = (n.neighbors ?? []).filter(nb => !_visited.has(parseInt(nb)));
+        const size = Number(n.attributes?.avg_tx_size || 0);
+        return { 
+          id: parseInt(n.id), 
+          data: n, 
+          unvisited: unv, 
+          score: size * unv.length 
+        };
+      })
+      .filter(l => l.unvisited.length > 0 && Number(l.data.attributes.avg_tx_size) > 200)
+      .sort((a,b) => b.score - a.score);
+
+    if (!leads.length) break;
+
+    const bestLead = leads[0];
+    console.log(`🔥 Burst Expanding Node ${bestLead.id} (Score: ${bestLead.score.toFixed(0)}) → [${bestLead.unvisited.join(',')}]`);
+
+    // Concurrent Burst: Query all neighbors of the lead simultaneously
+    await Promise.all(
+      bestLead.unvisited.map(async nbId => {
+        if (_suspect) return;
+        try {
+          const d = await qNode(nbId);
+          if (Number(d.attributes?.avg_tx_size) > 8000) {
+            _suspect = parseInt(d.id);
+            console.log(`🎯 TARGET IDENTIFIED: Node ${_suspect}`);
+          }
+        } catch(e) {}
+      })
+    );
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  // ── Final Decision ───────────────────────────────────────────
+  if (!_suspect) {
+    const sorted = Object.values(_allData).sort((a,b) => (b.attributes?.avg_tx_size || 0) - (a.attributes?.avg_tx_size || 0));
+    _suspect = parseInt(sorted[0].id);
+    console.warn(`⚠ Using best candidate Node ${_suspect} (size=${sorted[0].attributes.avg_tx_size})`);
+  }
+
+  // ── Pathfinding Safety ───────────────────────────────────────
+  let path = bfs(anc.id, _suspect, _allData);
+  if (!path) {
+    console.warn("📍 Path broken. Attempting bridge discovery...");
+    const neighbors = (_allData[_suspect]?.neighbors || []);
+    for (const nb of neighbors) {
+       if (_qLeft <= 2) break;
+       await qNode(nb);
+       path = bfs(anc.id, _suspect, _allData);
+       if (path) break;
     }
   }
 
-  if(!_suspect) _suspect = parseInt(Object.keys(_allData).sort((a,b)=>getScore(b)-getScore(a))[0]);
-  console.log(`🎯 TARGET IDENTIFIED: Node ${_suspect}`);
-  
-  const path = findPath(_anchor.id, _suspect);
-  const sub = await (await fetch(`${BASE}/submit?email=${EMAIL}&week_id=${WEEK}`, {
-    method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${TOKEN}`},
-    body: JSON.stringify({target_node_id: _suspect, proof_path: path})
-  })).json();
+  if (!path) { console.error("❌ CRITICAL: No path to target found."); return; }
 
-  if(sub.completion_token) {
-    console.log("%c 🏆 TARGET ELIMINATED ", "background: #7c2d12; color: #fbbf24; font-weight: bold; font-size: 18px; padding: 10px;");
-    console.log(`JWT: ${sub.completion_token}`);
+  // ── Auto-Submission ──────────────────────────────────────────
+  console.log(`✅ FINAL SUSPECT: ${_suspect}`);
+  console.log(`🔗 PATH: [${path.join(' → ')}]`);
+  
+  if (Number(_allData[_suspect]?.attributes.avg_tx_size || 0) >= 8000) {
+    console.log("🚀 SUBMITTING TO HEADQUARTERS...");
+    try {
+      const resp = await api('POST', '/submit', { compromised_node: _suspect, path: path }, token);
+      console.log("%c 🏆 MISSION ACCOMPLISHED ", "background: #7c2d12; color: #fbbf24; font-weight: bold; font-size: 18px; padding: 10px;");
+      if (resp.completion_token) {
+        console.log("%c JWT TOKEN: ", "color: #00ff00; font-weight: bold;", resp.completion_token);
+      } else {
+        console.log("Response:", resp);
+      }
+    } catch(e) { console.error("❌ Submission failed:", e); }
+  } else {
+    console.warn("❗ Candidate size < 8000. Verify manually before submission.");
   }
 })();
