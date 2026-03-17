@@ -1,9 +1,9 @@
 /**
- * 🧩 DATA LABYRINTH — AUTO SOLVER (v11.1 PERFECT PORT)
+ * 🧩 DATA LABYRINTH — AUTO SOLVER (v11.5 THE PRECISE ANALYST)
  * ═══════════════════════════════════════════════════════
  * Ported from the "Perfect" Web App Logic (v10 Bulletproof)
  * Features: Adjacency-Aware Navigation, Iterative DFS, 
- * and Full Statistical Analytics Suite.
+ * and Full Statistical Analytics Suite with 429 Resilience.
  * ═══════════════════════════════════════════════════════
  */
 
@@ -20,28 +20,40 @@ const WEEK  = '2026-W11';                        // 👈 Change current week
   const visited={}, frags=[];
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
-  // ── API Wrapper (Phantom-Class) ─────────────────────────────
-  async function api(path, body = {}, method = 'POST') {
-    const h = { 'Content-Type': 'application/json' };
-    if (TOKEN) h['X-Session-Token'] = TOKEN;
+  // ── API Wrapper (Phantom-Class with 429 Resilience) ─────────
+  async function api(path, body = {}, method = 'POST', retries = 3) {
+    const h = { 'content-type': 'application/json' };
+    if (TOKEN) h['x-session-token'] = TOKEN;
     const url = `${BASE}/${path}`;
-    try {
-      const res = await fetch(url, {
-        method, headers: h,
-        body: method === 'POST' ? JSON.stringify(path === 'start' ? { email: EMAIL, week: WEEK } : body) : null
-      });
-      const d = await res.json();
-      return { ok: res.ok, data: d };
-    } catch(e) { return { ok: false, error: e }; }
+    
+    for (let i = 0; i < retries; i++) {
+        try {
+            const res = await fetch(url, {
+                method, headers: h,
+                body: method === 'POST' ? JSON.stringify(path === 'start' ? { email: EMAIL, week: WEEK } : body) : null
+            });
+            if (res.status === 429) {
+                console.warn(`⏳ Rate limited. Retrying in ${1 + i}s...`);
+                await new Promise(res => setTimeout(res, 1000 * (i+1)));
+                continue;
+            }
+            const d = await res.json();
+            return { ok: res.ok, status: res.status, data: d };
+        } catch(e) { 
+            if (i === retries - 1) return { ok: false, error: e }; 
+        }
+    }
   }
 
   // ── Analytics Engine (Ported from solver.js) ─────────────────
   const mean = a => a.reduce((s, x) => s + x, 0) / a.length;
   const std = a => {
+    if (a.length < 2) return 0;
     const m = mean(a);
     return Math.sqrt(a.reduce((s, x) => s + (x - m) ** 2, 0) / a.length);
   };
   const median = a => {
+    if (a.length === 0) return 0;
     const s = [...a].sort((x, y) => x - y), m = Math.floor(s.length / 2);
     return s.length % 2 ? s[m] : (s[m-1] + s[m]) / 2;
   };
@@ -55,11 +67,13 @@ const WEEK  = '2026-W11';                        // 👈 Change current week
     return s[base];
   };
   const pearson = (x, y) => {
+    const n = x.length;
+    if (n === 0) return 0;
     const mx = mean(x), my = mean(y);
-    const n = x.reduce((s, xi, i) => s + (xi - mx) * (y[i] - my), 0);
+    const num = x.reduce((s, xi, i) => s + (xi - mx) * (y[i] - my), 0);
     const dx = Math.sqrt(x.reduce((s, xi) => s + (xi - mx) ** 2, 0));
     const dy = Math.sqrt(y.reduce((s, yi) => s + (yi - my) ** 2, 0));
-    return (dx === 0 || dy === 0) ? 0 : n / (dx * dy);
+    return (dx === 0 || dy === 0) ? 0 : num / (dx * dy);
   };
   const rd = (n, dp) => Math.round(n * 10 ** dp) / 10 ** dp;
 
@@ -68,8 +82,9 @@ const WEEK  = '2026-W11';                        // 👈 Change current week
     const hints = q.columns_hint || [];
     const [c1, c2] = hints;
     
-    // Strict: Exclude the entire record if ANY field is null, undefined, or 'CORRUPT'
-    const data = frags.filter(f => Object.values(f).every(v => v !== null && v !== undefined && v !== '' && v !== 'CORRUPT'));
+    // Global Strict Filter: Exclude if ANY field is 'CORRUPT'
+    const data = frags.filter(f => Object.values(f).every(v => v !== 'CORRUPT' && v !== null && v !== undefined));
+    
     if (!data.length) return null;
     const v1 = data.map(f => Number(f[c1])), v2 = c2 ? data.map(f => Number(f[c2])) : [];
     const r = n => rd(n, dp);
@@ -92,24 +107,36 @@ const WEEK  = '2026-W11';                        // 👈 Change current week
     if (/pearson|correlation/.test(text)) return r(pearson(v1, v2));
     if (/slope|linear regression/.test(text) && !/intercept/.test(text)) {
       const mx = mean(v1), my = mean(v2);
-      return r(v1.reduce((s, xi, i) => s + (xi - mx) * (v2[i] - my), 0) / v1.reduce((s, xi) => s + (xi - mx) ** 2, 0));
+      const num = v1.reduce((s, xi, i) => s + (xi - mx) * (v2[i] - my), 0);
+      const den = v1.reduce((s, xi) => s + (xi - mx) ** 2, 0);
+      return den === 0 ? 0 : r(num / den);
     }
     if (/intercept/.test(text)) {
       const mx = mean(v1), my = mean(v2);
-      const slp = v1.reduce((s, xi, i) => s + (xi - mx) * (v2[i] - my), 0) / v1.reduce((s, xi) => s + (xi - mx) ** 2, 0);
+      const num = v1.reduce((s, xi, i) => s + (xi - mx) * (v2[i] - my), 0);
+      const den = v1.reduce((s, xi) => s + (xi - mx) ** 2, 0);
+      const slp = den === 0 ? 0 : num / den;
       return r(my - slp * mx);
     }
-    if (/coefficient of variation|std\/mean/.test(text)) return r(std(v1) / mean(v1));
+    if (/coefficient of variation|std\/mean/.test(text)) {
+        const m = mean(v1);
+        return m === 0 ? 0 : r(std(v1) / m);
+    }
     if (/percentile/.test(text)) {
         const m = text.match(/(\d+)(st|nd|rd|th)\s+percentile/), p = m ? +m[1] : 50;
-        if (/(greater|above|more)/.test(text)) return v1.filter(v => v > pct(v1, p)).length;
-        if (/(less|below|under)/.test(text)) return v1.filter(v => v < pct(v1, p)).length;
-        return pct(v1, p);
+        const threshold = pct(v1, p);
+        if (/(greater|above|more)/.test(text)) return v1.filter(v => v > threshold).length;
+        if (/(less|below|under)/.test(text)) return v1.filter(v => v < threshold).length;
+        return threshold;
     }
     if (/interquartile|iqr/.test(text)) return pct(v1, 75) - pct(v1, 25);
-    if (/weighted mean/.test(text)) return r(v1.reduce((s, x, i) => s + x * v2[i], 0) / v2.reduce((s, x) => s + x, 0));
+    if (/weighted mean/.test(text)) {
+        const sw = v2.reduce((s, x) => s + x, 0);
+        const swv = v1.reduce((s, x, i) => s + x * v2[i], 0);
+        return sw === 0 ? 0 : r(swv / sw);
+    }
     if (/top\s+\d+/.test(text) && /(sum|total)/.test(text)) {
-       const n = parseInt(text.match(/top\s+(\d+)/)[1]);
+       const m = text.match(/top\s+(\d+)/), n = m ? +m[1] : 3;
        return [...data].sort((a,b)=>Number(b[c1])-Number(a[c1])).slice(0,n).reduce((acc,f)=>acc+Number(f[c2]),0);
     }
     if (/(mean|average)/.test(text)) return r(mean(v1));
@@ -140,7 +167,7 @@ const WEEK  = '2026-W11';                        // 👈 Change current week
   }
 
   async function doMove(dir) {
-    if (moves >= LIMIT) return null;
+    if (moves >= LIMIT - RESERVE) return null;
     const r = await api('move', { direction: dir });
     if (!r.ok || !r.data.success) return null;
     room = r.data.room_id;
@@ -159,10 +186,11 @@ const WEEK  = '2026-W11';                        // 👈 Change current week
         if (nb === target) {
           for (const d of [...path, dir]) {
             if (!(await doMove(d))) return false;
+            await sleep(250);
           }
           return true;
         }
-        if (!seen.has(nb) && visited[nb]) {
+        if (!seen.has(nb) && visited[nb] && !visited[nb].blocked) {
           seen.add(nb); queue.push([nb, [...path, dir]]);
         }
       }
@@ -190,7 +218,7 @@ const WEEK  = '2026-W11';                        // 👈 Change current week
             if (c.fragment_type === 'required') {
                 const d = c.fragment?.data || {};
                 frags.push(d);
-                console.log(`💎 Required Fragment #${frags.length} Collected (Start Room)`);
+                console.log(`💎 Required Fragment #${frags.length} Collected`);
             }
             visited[room].item_collected = true;
         }
@@ -211,6 +239,7 @@ const WEEK  = '2026-W11';                        // 👈 Change current week
         stack.pop();
         if (stack.length > 0 && top.fromDir) {
             await doMove(OPP[top.fromDir]);
+            await sleep(150);
         }
         continue;
       }
@@ -240,7 +269,7 @@ const WEEK  = '2026-W11';                        // 👈 Change current week
         }
       }
       stack.push({ roomId: room, pending: [...(roomData.exits || [])], fromDir: nextDir });
-      await sleep(100);
+      await sleep(150);
     }
   }
 
