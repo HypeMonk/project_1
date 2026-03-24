@@ -9,13 +9,12 @@
 3. [Step 2 — Find Your Insight](#3-step-2--find-your-insight)
 4. [Step 3 — Design a Visual Metaphor](#4-step-3--design-a-visual-metaphor)
 5. [Step 4 — Write a Strong DALL·E 3 Prompt](#5-step-4--write-a-strong-dalle-3-prompt)
-6. [Step 5 — Generate the Image (DALL·E 3 via Bing — Free)](#6-step-5--generate-image-with-dalle-3-free-via-bing)
-7. [Step 6 — Self-Evaluate with Gemini](#7-step-6--self-evaluate-with-gemini-3-pro)
-8. [Step 7 — Validate with a Script](#8-step-7--validate-your-submission-with-a-script)
-9. [Step 8 — Upload to GitHub and Get a Public URL](#9-step-8--upload-to-github-and-get-a-public-url)
-10. [Step 9 — Create the JSON File](#10-step-9--create-and-host-the-submission-json)
-11. [Step 10 — Final Submission Checklist](#11-step-10--final-submission-checklist)
-12. [Common Mistakes and How to Avoid Them](#12-common-mistakes-and-how-to-avoid-them)
+6. [Step 5 — Generate the Image](#6-step-5--generate-the-image)
+7. [Step 6 — Self-Evaluate with Gemini 3 Pro](#7-step-6--self-evaluate-with-gemini-3-pro)
+8. [Step 7 — Upload to GitHub and Get a Public URL](#8-step-7--upload-to-github-and-get-a-public-url)
+9. [Step 8 — Create and Host the Submission JSON](#9-step-8--create-and-host-the-submission-json)
+10. [Step 9 — Final Submission Checklist](#10-step-9--final-submission-checklist)
+11. [Common Mistakes and How to Avoid Them](#11-common-mistakes-and-how-to-avoid-them)
 
 ---
 
@@ -641,7 +640,7 @@ If you want your email attributed in the public exhibition:
 
 ---
 
-## 11. Step 10 — Final Submission Checklist
+## 10. Step 9 — Final Submission Checklist
 
 Go through every item before you submit.
 
@@ -681,7 +680,7 @@ https://raw.githubusercontent.com/YOUR_USERNAME/affective-chart/main/image.png  
 
 ---
 
-## 12. Common Mistakes and How to Avoid Them
+## 11. Common Mistakes and How to Avoid Them
 
 | Mistake | Why it matters | Fix |
 |---|---|---|
